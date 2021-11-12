@@ -992,6 +992,7 @@ enum fsync_object_files_mode {
 };
 
 extern enum fsync_object_files_mode fsync_object_files;
+extern int use_fsync;
 extern int core_preload_index;
 extern int precomposed_unicode;
 extern int protect_hfs;
