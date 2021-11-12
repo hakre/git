@@ -64,6 +64,13 @@ test_expect_success '--orphan ignores branch.autosetupmerge' '
 	git checkout --orphan gamma &&
 	test -z "$(git config branch.gamma.merge)" &&
 	test refs/heads/gamma = "$(git symbolic-ref HEAD)" &&
+	test_must_fail git rev-parse --verify HEAD^ &&
+	git checkout main &&
+	git config branch.autosetupmerge inherit &&
+	git checkout --orphan eta &&
+	test -z "$(git config branch.eta.merge)" &&
+	test -z "$(git config branch.eta.remote)" &&
+	test refs/heads/eta = "$(git symbolic-ref HEAD)" &&
 	test_must_fail git rev-parse --verify HEAD^
 '
 
