@@ -23,6 +23,43 @@ enum {
 	REMOTE_BRANCHES
 };
 
+struct rewrite {
+	const char *base;
+	size_t baselen;
+	struct counted_string *instead_of;
+	int instead_of_nr;
+	int instead_of_alloc;
+};
+
+struct rewrites {
+	struct rewrite **rewrite;
+	int rewrite_alloc;
+	int rewrite_nr;
+};
+
+struct remote_state {
+	struct remote **remotes;
+	int remotes_alloc;
+	int remotes_nr;
+	struct hashmap remotes_hash;
+
+	struct branch **branches;
+	int branches_alloc;
+	int branches_nr;
+	struct hashmap branches_hash;
+
+	struct branch *current_branch;
+	const char *pushremote_name;
+
+	struct rewrites rewrites;
+	struct rewrites rewrites_push;
+
+	int initialized;
+};
+
+void remote_state_clear(struct remote_state *remote_state);
+struct remote_state *remote_state_new(void);
+
 struct remote {
 	struct hashmap_entry ent;
 
@@ -83,15 +120,28 @@ struct remote {
  * remote_get(NULL) will return the default remote, given the current branch
  * and configuration.
  */
-struct remote *remote_get(const char *name);
+struct remote *repo_remote_get(struct repository *repo, const char *name);
+static inline struct remote *remote_get(const char *name)
+{
+	return repo_remote_get(the_repository, name);
+}
 
-struct remote *pushremote_get(const char *name);
+struct remote *repo_pushremote_get(struct repository *repo, const char *name);
+static inline struct remote *pushremote_get(const char *name)
+{
+	return repo_pushremote_get(the_repository, name);
+}
 int remote_is_configured(struct remote *remote, int in_repo);
 
 typedef int each_remote_fn(struct remote *remote, void *priv);
 
 /* iterate through struct remotes */
-int for_each_remote(each_remote_fn fn, void *priv);
+int repo_for_each_remote(struct repository *repo, each_remote_fn fn,
+			 void *priv);
+static inline int for_each_remote(each_remote_fn fn, void *priv)
+{
+	return repo_for_each_remote(the_repository, fn, priv);
+}
 
 int remote_has_url(struct remote *remote, const char *url);
 
@@ -256,6 +306,7 @@ int remote_find_tracking(struct remote *remote, struct refspec_item *refspec);
  * branch_get(name) for "refs/heads/{name}", or with branch_get(NULL) for HEAD.
  */
 struct branch {
+	struct hashmap_entry ent;
 
 	/* The short name of the branch. */
 	const char *name;
@@ -286,10 +337,29 @@ struct branch {
 	const char *push_tracking_ref;
 };
 
-struct branch *branch_get(const char *name);
-const char *remote_for_branch(struct branch *branch, int *explicit);
-const char *pushremote_for_branch(struct branch *branch, int *explicit);
-const char *remote_ref_for_branch(struct branch *branch, int for_push);
+struct branch *repo_branch_get(struct repository *repo, const char *name);
+static inline struct branch *branch_get(const char *name)
+{
+	return repo_branch_get(the_repository, name);
+}
+
+const char *repo_remote_for_branch(struct repository *repo, struct branch *branch, int *explicit);
+static inline const char *remote_for_branch(struct branch *branch, int *explicit)
+{
+	return repo_remote_for_branch(the_repository, branch, explicit);
+}
+
+const char *repo_pushremote_for_branch(struct repository *repo, struct branch *branch, int *explicit);
+static inline const char *pushremote_for_branch(struct branch *branch, int *explicit)
+{
+	return repo_pushremote_for_branch(the_repository, branch, explicit);
+}
+
+const char *repo_remote_ref_for_branch(struct repository *repo, struct branch *branch, int for_push);
+static inline const char *remote_ref_for_branch(struct branch *branch, int for_push)
+{
+	return repo_remote_ref_for_branch(the_repository, branch, for_push);
+}
 
 /* returns true if the given branch has merge configuration given. */
 int branch_has_merge_config(struct branch *branch);
@@ -313,7 +383,11 @@ const char *branch_get_upstream(struct branch *branch, struct strbuf *err);
  *
  * The return value and `err` conventions match those of `branch_get_upstream`.
  */
-const char *branch_get_push(struct branch *branch, struct strbuf *err);
+const char *repo_branch_get_push(struct repository *repo, struct branch *branch, struct strbuf *err);
+static inline const char *branch_get_push(struct branch *branch, struct strbuf *err)
+{
+	return repo_branch_get_push(the_repository, branch, err);
+}
 
 /* Flags to match_refs. */
 enum match_refs_flags {
@@ -332,11 +406,27 @@ enum ahead_behind_flags {
 };
 
 /* Reporting of tracking info */
-int stat_tracking_info(struct branch *branch, int *num_ours, int *num_theirs,
-		       const char **upstream_name, int for_push,
-		       enum ahead_behind_flags abf);
-int format_tracking_info(struct branch *branch, struct strbuf *sb,
-			 enum ahead_behind_flags abf);
+int repo_stat_tracking_info(struct repository *repo, struct branch *branch,
+			    int *num_ours, int *num_theirs,
+			    const char **upstream_name, int for_push,
+			    enum ahead_behind_flags abf);
+static inline int stat_tracking_info(struct branch *branch, int *num_ours,
+				     int *num_theirs,
+				     const char **upstream_name, int for_push,
+				     enum ahead_behind_flags abf)
+{
+	return repo_stat_tracking_info(the_repository, branch, num_ours,
+				       num_theirs, upstream_name, for_push,
+				       abf);
+}
+
+int repo_format_tracking_info(struct repository *repo, struct branch *branch,
+			      struct strbuf *sb, enum ahead_behind_flags abf);
+static inline int format_tracking_info(struct branch *branch, struct strbuf *sb,
+				       enum ahead_behind_flags abf)
+{
+	return repo_format_tracking_info(the_repository, branch, sb, abf);
+}
 
 struct ref *get_local_heads(void);
 /*
