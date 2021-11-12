@@ -234,7 +234,7 @@ int validate_branchname(const char *name, struct strbuf *ref)
  */
 int validate_new_branchname(const char *name, struct strbuf *ref, int force)
 {
-	const char *head;
+	const struct worktree *wt;
 
 	if (!validate_branchname(name, ref))
 		return 0;
@@ -243,9 +243,11 @@ int validate_new_branchname(const char *name, struct strbuf *ref, int force)
 		die(_("A branch named '%s' already exists."),
 		    ref->buf + strlen("refs/heads/"));
 
-	head = resolve_ref_unsafe("HEAD", 0, NULL, NULL);
-	if (!is_bare_repository() && head && !strcmp(head, ref->buf))
-		die(_("Cannot force update the current branch."));
+	wt = find_shared_symref("HEAD", ref->buf);
+	if (wt && !wt->is_bare)
+		die(_("Cannot force update the branch '%s'"
+		      "checked out at '%s'."),
+		    ref->buf + strlen("refs/heads/"), wt->path);
 
 	return 1;
 }

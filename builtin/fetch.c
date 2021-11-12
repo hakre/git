@@ -28,6 +28,7 @@
 #include "promisor-remote.h"
 #include "commit-graph.h"
 #include "shallow.h"
+#include "worktree.h"
 
 #define FORCED_UPDATES_DELAY_WARNING_IN_MS (10 * 1000)
 
@@ -854,7 +855,7 @@ static int update_local_ref(struct ref *ref,
 			    int summary_width)
 {
 	struct commit *current = NULL, *updated;
-	struct branch *current_branch = branch_get(NULL);
+	const struct worktree *wt;
 	const char *pretty_ref = prettify_refname(ref->name);
 	int fast_forward = 0;
 
@@ -868,16 +869,18 @@ static int update_local_ref(struct ref *ref,
 		return 0;
 	}
 
-	if (current_branch &&
-	    !strcmp(ref->name, current_branch->name) &&
-	    !(update_head_ok || is_bare_repository()) &&
+	if (!update_head_ok &&
+	    (wt = find_shared_symref("HEAD", ref->name)) &&
+	    !wt->is_bare &&
 	    !is_null_oid(&ref->old_oid)) {
 		/*
 		 * If this is the head, and it's not okay to update
 		 * the head, and the old value of the head isn't empty...
 		 */
 		format_display(display, '!', _("[rejected]"),
-			       _("can't fetch in current branch"),
+			       wt->is_current ?
+			       _("can't fetch in current branch") :
+			       _("checked out in another worktree"),
 			       remote, pretty_ref, summary_width);
 		return 1;
 	}
@@ -1387,16 +1390,14 @@ static int prune_refs(struct refspec *rs, struct ref *ref_map,
 
 static void check_not_current_branch(struct ref *ref_map)
 {
-	struct branch *current_branch = branch_get(NULL);
-
-	if (is_bare_repository() || !current_branch)
-		return;
-
+	const struct worktree *wt;
 	for (; ref_map; ref_map = ref_map->next)
-		if (ref_map->peer_ref && !strcmp(current_branch->refname,
-					ref_map->peer_ref->name))
-			die(_("Refusing to fetch into current branch %s "
-			    "of non-bare repository"), current_branch->refname);
+		if (ref_map->peer_ref &&
+		    (wt = find_shared_symref("HEAD", ref_map->peer_ref->name)) &&
+		    !wt->is_bare)
+			die(_("Refusing to fetch into branch '%s' "
+			      "checked out at '%s'"),
+			    ref_map->peer_ref->name, wt->path);
 }
 
 static int truncate_fetch_head(void)
